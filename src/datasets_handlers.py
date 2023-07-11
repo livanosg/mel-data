@@ -1,52 +1,109 @@
 import glob
 import os
-import pandas as pd
+import shutil
+from multiprocessing.pool import ThreadPool
+from zipfile import ZipFile
 
-from conf import RAW_DATA_PATH
+import pandas as pd
+import requests
+from tqdm.auto import tqdm
+
+from conf import INIT_DATA_PATH, SETUP_DATA_PATH, URLS_CREDENTIALS
+from datasets_urls import SPC_URLS, ISIC16_URLS, ISIC17_URLS, ISIC18_URLS
 
 
 class DatasetHandler:
-    def __init__(self, name: str):
+    def __init__(self, name: str, urls: None | list[str] = None, credentials: None | tuple[str, str] = None):
         self.name = name
-        self.raw_dataset_path = os.path.join(RAW_DATA_PATH, self.name)
-        self.image_dir = os.path.join(self.raw_dataset_path, "images")
-        self.meta_dir = os.path.join(self.raw_dataset_path, "meta")
+        self.urls = urls
+        self.init_data_path = os.path.join(INIT_DATA_PATH, self.name)
+        self.setup_data_path = os.path.join(SETUP_DATA_PATH, self.name)
+        self.credentials = credentials
 
     def fetch_metadata(self):
         """
-        The fetch_metadata function reads the metadata file and returns a pandas dataframe.
-        :return: A pandas dataframe
+        The fetch_metadata function is a placeholder to apply the logic of retrieving metadata for a given dataset.
         """
-        return pd.read_csv(self.meta_dir)
+        pass
+
+    def download_dataset(self, force: bool = False):
+        """
+        The download_dataset function downloads the dataset from given URLs.
+        :param force: bool: Remove contents of the init_data and download of the dataset
+        """
+        if not self.urls:
+            print(f"No URL to download data for {self.name}")
+            return None
+
+        if not os.path.exists(self.init_data_path) or force:
+            if force:
+                print(f"Removing old data from {self.init_data_path}...")
+                shutil.rmtree(path=self.init_data_path, ignore_errors=True)
+
+            os.makedirs(self.init_data_path, exist_ok=True)
+            print(f"Downloading {self.name}...")
+
+            def _download(_url, position):
+                filename = os.path.join(self.init_data_path, os.path.basename(_url))
+                if os.path.exists(filename):
+                    pass
+                print(f"Downloading {os.path.basename(_url)} to {self.init_data_path}")
+                resp = requests.get(_url, auth=self.credentials, stream=True)
+                with tqdm(desc=os.path.basename(_url),
+                          total=int(resp.headers.get('content-length', 0)),
+                          unit='iB', unit_scale=True, unit_divisor=1024,
+                          position=position) as bar:
+                    with open(filename, 'wb') as file:
+                        for data in resp.iter_content(chunk_size=1024):
+                            file.write(data)
+                            bar.update(1024)
+
+            with ThreadPool(min(len(self.urls), len(os.sched_getaffinity(0)))) as pool:
+                pool.starmap(_download, list(zip(self.urls, list(range(len(self.urls))))))
+            print("Done!")
+        else:
+            print(f"{self.init_data_path} already exists")
+
+    def setup_dataset(self, force: bool = False):
+        """
+        The extract_dataset function extracts a dataset from the initial dataset folder to the data_folder.
+        :param force:
+        :return: None
+        """
+        if force:
+            print(f"Removing old data from {self.setup_data_path}...")
+            shutil.rmtree(path=self.setup_data_path, ignore_errors=True)
+        print(f"Copying data from {self.init_data_path} to {self.setup_data_path}")
+        shutil.copytree(src=self.init_data_path,
+                        dst=self.setup_data_path)
+
+        def _zip_extract(folder: str):
+            print(f"Extracting {folder}...")
+            for file in glob.glob(os.path.join(folder, "**/*.zip"), recursive=True):
+                with ZipFile(file, "r") as zipObj:
+                    zipObj.extractall(path=os.path.split(file)[0])
+                os.remove(file)
+            if glob.glob(os.path.join(folder, "**/*.zip"), recursive=True):
+                _zip_extract(folder=folder)
+
+        _zip_extract(self.setup_data_path)
+
+    def split_data(self):
+        pass
 
 
-class Spt(DatasetHandler):
+class Isic16Handler(DatasetHandler):
     def __init__(self):
-        super().__init__("7pt")
-        self.image_dir = os.path.join(self.raw_dataset_path, "release_v0", "images")
-        self.meta_dir = os.path.join(self.raw_dataset_path, "release_v0", "meta", "meta.csv")
+        super().__init__(name="isic16", urls=ISIC16_URLS)
+        self.image_dir = os.path.join(self.setup_data_path)
+        self.meta_dir = os.path.join(self.setup_data_path)
 
 
-class Dermofit(DatasetHandler):
+class Isic17Handler(DatasetHandler):
     def __init__(self):
-        super().__init__("dermofit")
-        self.image_dir = os.path.join(self.raw_dataset_path, "Dermofit Database")
-        self.meta_dir = os.path.join(self.raw_dataset_path, "Dermofit Database", "lesionlist.txt")
-        self
-
-
-class Isic16Part3(DatasetHandler):
-    def __init__(self):
-        super().__init__("isic16")
-        self.image_dir = os.path.join(self.raw_dataset_path, "ISBI2016_ISIC_Part3_Test_Data")
-        self.meta_dir = os.path.join(self.raw_dataset_path, "ISBI2016_ISIC_Part3_Test_GroundTruth.csv")
-
-
-class Isic17(DatasetHandler):
-    def __init__(self):
-        super().__init__("isic17")
-        self.image_dir = os.path.join(self.raw_dataset_path, "ISIC-2017_Test_v2_Data")
-        self.meta_dir = os.path.join(self.raw_dataset_path, "ISIC-2017_Test_v2_Part3_GroundTruth.csv")
+        super().__init__(name="isic17", urls=ISIC17_URLS)
+        self.image_dir = os.path.join(self.setup_data_path)
+        self.meta_dir = os.path.join(self.setup_data_path)
 
     def fetch_metadata(self):
         """
@@ -63,20 +120,18 @@ class Isic17(DatasetHandler):
         return df.reindex()
 
 
-class Isic18(DatasetHandler):
+class Isic18Handler(DatasetHandler):
     def __init__(self):
-        super().__init__("isic18")
-        self.image_dir = os.path.join(self.raw_dataset_path, "ISIC-2018_Test_v2_Data")
-        self.meta_dir = os.path.join(self.raw_dataset_path,
-                                     "ISIC2018_Task3_Validation_GroundTruth",
-                                     "ISIC2018_Task3_Validation_GroundTruth.csv")
+        super().__init__("isic18", urls=ISIC18_URLS)
+        self.image_dir = os.path.join(self.setup_data_path)
+        self.meta_dir = os.path.join(self.setup_data_path)
 
 
-class Isic19(DatasetHandler):
+class Isic19Handler(DatasetHandler):
     def __init__(self):
         super().__init__("isic19")
-        self.image_dir = os.path.join(self.raw_dataset_path, "ISIC_2019_Training_Input")
-        self.meta_dir = os.path.join(self.raw_dataset_path, "ISIC2019_Training_GroundTruth.csv")
+        self.image_dir = os.path.join(self.setup_data_path)
+        self.meta_dir = os.path.join(self.setup_data_path)
 
     def fetch_metadata(self):
         """
@@ -86,45 +141,74 @@ class Isic19(DatasetHandler):
         :return: A dataframe with the columns:
         """
         df1 = pd.read_csv(self.meta_dir, index_col=0)
-        df2 = pd.read_csv(os.path.join(self.raw_dataset_path, "ISIC_2019_Training_Metadata.csv"), index_col=0)
+        df2 = pd.read_csv(os.path.join(self.setup_data_path, "ISIC_2019_Training_Metadata.csv"), index_col=0)
         df = pd.concat([df1, df2], axis=1, ignore_index=True)
         df["image"] = df.index
         return df.reindex()
 
 
-class Isic19Test(DatasetHandler):
-    def __init__(self):
-        super().__init__("isic19_test")
-        self.image_dir = os.path.join(self.raw_dataset_path, "ISIC_2019_Test_Input")
-        self.meta_dir = os.path.join(self.raw_dataset_path, "ISIC_2019_Test_Metadata.csv")
-
-
-class Isic20(DatasetHandler):
+class Isic20Handler(DatasetHandler):
     def __init__(self):
         super().__init__("isic20")
-        self.image_dir = os.path.join(self.raw_dataset_path, "train")
-        self.meta_dir = os.path.join(self.raw_dataset_path, "ISIC_2020_Training_GroundTruth_v2.csv")
+        self.image_dir = os.path.join(self.setup_data_path, "train")
+        self.meta_dir = os.path.join(self.setup_data_path, "ISIC_2020_Training_GroundTruth_v2.csv")
 
     def _remove_duplicates(self):
         meta = pd.read_csv(self.meta_dir)
-        duplicates = pd.read_csv(os.path.join(self.raw_dataset_path, "ISIC_2020_Training_Duplicates.csv"))
+        duplicates = pd.read_csv(os.path.join(self.setup_data_path, "ISIC_2020_Training_Duplicates.csv"))
         return meta[~meta.loc[:, "image_name"].isin(duplicates["image_name_2"])]
 
     def fetch_metadata(self, remove_duplicates=True):
         return self._remove_duplicates() if remove_duplicates else pd.read_csv(self.meta_dir)
 
 
-class Isic20Test(DatasetHandler):
+# DONE
+class SPCHandler(DatasetHandler):
     def __init__(self):
-        super().__init__("isic20_test")
-        self.image_dir = os.path.join(self.raw_dataset_path, "ISIC_2020_Test_Input")
-        self.meta_dir = os.path.join(self.raw_dataset_path, "ISIC_2020_Test_Metadata.csv")
+        super().__init__(name="spc", credentials=URLS_CREDENTIALS["spc"], urls=SPC_URLS)
+        self.image_folder = os.path.join(self.setup_data_path, "release_v0", "images")
+        self.meta_folder = os.path.join(self.setup_data_path, "release_v0", "meta")
+        self.meta_data_path = os.path.join(self.meta_folder, "meta.csv")
+
+    def split_data(self):
+        """
+        The split_data function takes the metadata file and splits it into three separate dataframes:
+        train, valid, and test. The function uses the train_indexes.csv, valid_indexes.csv,
+        and test_indexes.csv files to determine which rows of the metadata file should be in each dataframe.
+
+        :return: A tuple of train, valid and test dataframes
+        """
+        all_data = self.fetch_metadata()
+        train_idx = pd.read_csv(os.path.join(self.meta_folder, "train_indexes.csv"))
+        valid_idx = pd.read_csv(os.path.join(self.meta_folder, "valid_indexes.csv"))
+        test_idx = pd.read_csv(os.path.join(self.meta_folder, "test_indexes.csv"))
+
+        train = all_data[all_data.index.isin(train_idx["indexes"])]
+        valid = all_data[all_data.index.isin(valid_idx["indexes"])]
+        test = all_data[all_data.index.isin(test_idx["indexes"])]
+        return train, valid, test
 
 
-class Mednode(DatasetHandler):
+# DONE
+class DermofitHandler(DatasetHandler):
+    def __init__(self):
+        super().__init__(name="dermofit")
+        self.image_dir = self.setup_data_path
+        self.meta_data_path = os.path.join(self.setup_data_path, "lesionlist.txt")
+
+    def fetch_metadata(self):
+        df = pd.read_csv(self.meta_data_path, index_col=0, header=None, sep="   ")
+        df.columns = ["image", "lesion"]  # Set names of columns
+        return df
+
+    def split_data(self):
+        pass
+
+
+class MedNodeHandler(DatasetHandler):
     def __init__(self):
         super().__init__("mednode")
-        self.image_dir = os.path.join(self.raw_dataset_path, "complete_mednode_dataset")
+        self.image_dir = os.path.join(self.setup_data_path, "complete_mednode_dataset")
         self.meta_dir = None
 
     def fetch_metadata(self):
@@ -147,20 +231,20 @@ class Mednode(DatasetHandler):
         return pd.concat([melanoma_df, naevus_df], axis=0, ignore_index=True).fillna(0)
 
 
-class Padufes(DatasetHandler):
+class PadufesHandler(DatasetHandler):
     def __init__(self):
         super().__init__("padufes")
-        self.image_dir = os.path.join(self.raw_dataset_path, "images")
-        self.meta_dir = os.path.join(self.raw_dataset_path, "metadata.csv")
+        self.image_dir = os.path.join(self.setup_data_path, "images")
+        self.meta_dir = os.path.join(self.setup_data_path, "metadata.csv")
         map(lambda src: os.rename(src=src, dst=os.path.join(self.image_dir, os.path.basename(src))),
-            glob.glob(os.path.join(self.raw_dataset_path, "imgs_part_*/**"), recursive=True))
+            glob.glob(os.path.join(self.setup_data_path, "imgs_part_*/**"), recursive=True))
 
 
-class Ph2(DatasetHandler):
+class Ph2Handler(DatasetHandler):
     def __init__(self):
         super().__init__("ph2")
-        self.image_dir = os.path.join(self.raw_dataset_path, "PH2 Dataset images")
-        self.meta_dir = os.path.join(self.raw_dataset_path, "PH2_Dataset.csv")
+        self.image_dir = os.path.join(self.setup_data_path, "PH2 Dataset images")
+        self.meta_dir = os.path.join(self.setup_data_path, "PH2_Dataset.csv")
         # Create if not exists the csv equivalent of PH2_Dataset.txt
         if not os.path.exists(self.meta_dir):
             with open("/home/giorgos/projects/mel-data/raw_data/ph2/PH2Dataset/PH2_dataset.txt", "r") as f:
@@ -186,7 +270,7 @@ class Ph2(DatasetHandler):
                                         1: "Atypical Nevus",
                                         2: "Melanoma"}
         legends["Asymmetry"] = {0: "Fully Symmetric",
-                                1: "Symetric in 1 axe",
+                                1: "Symmetric in 1 axe",
                                 2: "Fully Asymmetric"}
         legends["Colors"] = {1: "White",
                              2: "Red",
@@ -200,10 +284,13 @@ class Ph2(DatasetHandler):
         return pd.read_csv(self.meta_dir)
 
 
-class UP(DatasetHandler):  # TODO Setup UP dataset
+class UPHandler(DatasetHandler):  # TODO Setup UP dataset
     def __init__(self):
         super().__init__("up")
 
 
 if __name__ == '__main__':
-    a = Ph2()
+    a = Isic17Handler()
+    b = Isic18Handler()
+    a.download_dataset()
+    b.download_dataset()
