@@ -9,7 +9,7 @@ import requests
 from tqdm.auto import tqdm
 
 from conf import INIT_DATA_PATH, SETUP_DATA_PATH, URLS_CREDENTIALS
-from datasets_urls import SPC_URLS, ISIC16_URLS, ISIC17_URLS, ISIC18_URLS
+from datasets_urls import SPC_URLS, ISIC16_URLS, ISIC17_URLS, ISIC18_URLS, ISIC19_URLS, ISIC20_URLS
 
 
 class DatasetHandler:
@@ -19,12 +19,13 @@ class DatasetHandler:
         self.init_data_path = os.path.join(INIT_DATA_PATH, self.name)
         self.setup_data_path = os.path.join(SETUP_DATA_PATH, self.name)
         self.credentials = credentials
+        self.meta_data_path = ""
 
     def fetch_metadata(self):
         """
         The fetch_metadata function is a placeholder to apply the logic of retrieving metadata for a given dataset.
         """
-        pass
+        return pd.read_csv(self.meta_data_path)
 
     def download_dataset(self, force: bool = False):
         """
@@ -122,14 +123,14 @@ class Isic17Handler(DatasetHandler):
 
 class Isic18Handler(DatasetHandler):
     def __init__(self):
-        super().__init__("isic18", urls=ISIC18_URLS)
+        super().__init__(name="isic18", urls=ISIC18_URLS)
         self.image_dir = os.path.join(self.setup_data_path)
         self.meta_dir = os.path.join(self.setup_data_path)
 
 
 class Isic19Handler(DatasetHandler):
     def __init__(self):
-        super().__init__("isic19")
+        super().__init__(name="isic19", urls=ISIC19_URLS)
         self.image_dir = os.path.join(self.setup_data_path)
         self.meta_dir = os.path.join(self.setup_data_path)
 
@@ -149,7 +150,7 @@ class Isic19Handler(DatasetHandler):
 
 class Isic20Handler(DatasetHandler):
     def __init__(self):
-        super().__init__("isic20")
+        super().__init__(name="isic20", urls=ISIC20_URLS)
         self.image_dir = os.path.join(self.setup_data_path, "train")
         self.meta_dir = os.path.join(self.setup_data_path, "ISIC_2020_Training_GroundTruth_v2.csv")
 
@@ -290,7 +291,12 @@ class UPHandler(DatasetHandler):  # TODO Setup UP dataset
 
 
 if __name__ == '__main__':
-    a = Isic17Handler()
-    b = Isic18Handler()
-    a.download_dataset()
-    b.download_dataset()
+    isic16 = Isic16Handler()
+    isic17 = Isic17Handler()
+    isic18 = Isic18Handler()
+    isic19 = Isic19Handler()
+    isic20 = Isic20Handler()
+    isic19.download_dataset()
+    isic20.download_dataset()
+    isic19.setup_dataset()
+    isic20.setup_dataset()
