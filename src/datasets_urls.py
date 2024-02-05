@@ -1,3 +1,5 @@
+import os
+
 DATASETS_INFO = {
     'isic16': {"urls": ["https://isic-challenge-data.s3.amazonaws.com/2016/ISBI2016_ISIC_Part3B_Training_Data.zip",
                         "https://isic-challenge-data.s3.amazonaws.com/2016/ISBI2016_ISIC_Part3B_Training_GroundTruth.csv",
@@ -60,7 +62,8 @@ DATASETS_INFO = {
     'mednode': {"urls": ["https://www.cs.rug.nl/~imaging/databases/melanoma_naevi"
                          "/complete_mednode_dataset.zip"]
                 },
-    'spc': {"urls": ["https://derm.cs.sfu.ca/restricted/release_v0.zip"]
+    'spc': {"urls": ["https://derm.cs.sfu.ca/restricted/release_v0.zip"],
+            "credentials": os.environ["SPC_CREDENTIALS"].split(",")
             },
     'ph2': {"urls": ["https://www.dropbox.com/s/k88qukc20ljnbuo/PH2Dataset.rar"]
             }

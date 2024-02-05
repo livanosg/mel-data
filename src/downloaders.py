@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from src.conf import DATA_PATH
 from src.datasets_urls import DATASETS_INFO
+from requests.auth import HTTPBasicAuth
 
 
 def download_dataset(dataset: str, force: bool = False):
@@ -18,6 +19,7 @@ def download_dataset(dataset: str, force: bool = False):
     """
 
     urls: list = DATASETS_INFO[dataset].get("urls", None)
+    credentials = DATASETS_INFO[dataset].get("credentials", (None, None))
     local_data_dir = os.path.join(DATA_PATH, dataset)
     if urls is None:
         raise ValueError(f"Invalid dataset: {dataset}. Please choose from {list(DATASETS_INFO.keys())}")
@@ -27,7 +29,7 @@ def download_dataset(dataset: str, force: bool = False):
         if "www.dropbox.com" in _url:
             _url = _url.replace("www.dropbox.com", "dl.dropboxusercontent.com").split("?")[0]
 
-        resp = requests.get(_url, stream=True)
+        resp = requests.get(_url, auth=HTTPBasicAuth(*credentials), stream=True)
 
         with tqdm(desc=os.path.basename(_url), total=int(resp.headers.get('content-length', 0)),
                   unit='iB', unit_scale=True, unit_divisor=1024, position=position) as bar:
