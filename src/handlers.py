@@ -1,69 +1,25 @@
 import glob
 import os
 import shutil
-from multiprocessing.pool import ThreadPool
 from zipfile import ZipFile
 
 import pandas as pd
-import requests
-from tqdm.auto import tqdm
 
-from conf import INIT_DATA_PATH, SETUP_DATA_PATH, URLS_CREDENTIALS
-from datasets_urls import SPC_URLS, ISIC16_URLS, ISIC17_URLS, ISIC18_URLS, ISIC19_URLS, ISIC20_URLS
+from conf import DATA_PATH, SETUP_DATA_PATH, URLS_CREDENTIALS
+from datasets_urls import DATASETS_INFO
 
 
 class DatasetHandler:
-    def __init__(self, name: str, urls: None | list[str] = None, credentials: None | tuple[str, str] = None):
+    def __init__(self, name: str):
         self.name = name
-        self.urls = urls
-        self.init_data_path = os.path.join(INIT_DATA_PATH, self.name)
-        self.setup_data_path = os.path.join(SETUP_DATA_PATH, self.name)
-        self.credentials = credentials
-        self.meta_data_path = ""
+        self.urls = DATASETS_INFO[self.name]["urls"]
+        self.raw_data_path = os.path.join(DATA_PATH, self.name)
 
     def fetch_metadata(self):
         """
         The fetch_metadata function is a placeholder to apply the logic of retrieving metadata for a given dataset.
         """
-        return pd.read_csv(self.meta_data_path)
-
-    def download_dataset(self, force: bool = False):
-        """
-        The download_dataset function downloads the dataset from given URLs.
-        :param force: bool: Remove contents of the init_data and download of the dataset
-        """
-        if not self.urls:
-            print(f"No URL to download data for {self.name}")
-            return None
-
-        if not os.path.exists(self.init_data_path) or force:
-            if force:
-                print(f"Removing old data from {self.init_data_path}...")
-                shutil.rmtree(path=self.init_data_path, ignore_errors=True)
-
-            os.makedirs(self.init_data_path, exist_ok=True)
-            print(f"Downloading {self.name}...")
-
-            def _download(_url, position):
-                filename = os.path.join(self.init_data_path, os.path.basename(_url))
-                if os.path.exists(filename):
-                    pass
-                print(f"Downloading {os.path.basename(_url)} to {self.init_data_path}")
-                resp = requests.get(_url, auth=self.credentials, stream=True)
-                with tqdm(desc=os.path.basename(_url),
-                          total=int(resp.headers.get('content-length', 0)),
-                          unit='iB', unit_scale=True, unit_divisor=1024,
-                          position=position) as bar:
-                    with open(filename, 'wb') as file:
-                        for data in resp.iter_content(chunk_size=1024):
-                            file.write(data)
-                            bar.update(1024)
-
-            with ThreadPool(min(len(self.urls), len(os.sched_getaffinity(0)))) as pool:
-                pool.starmap(_download, list(zip(self.urls, list(range(len(self.urls))))))
-            print("Done!")
-        else:
-            print(f"{self.init_data_path} already exists")
+        pass
 
     def setup_dataset(self, force: bool = False):
         """
