@@ -3,12 +3,11 @@ import shutil
 from multiprocessing.pool import ThreadPool
 
 import requests
-
+from requests.auth import HTTPBasicAuth
 from tqdm import tqdm
 
 from src.conf import DATA_PATH
 from src.datasets_urls import DATASETS_INFO
-from requests.auth import HTTPBasicAuth
 
 
 def download_dataset(dataset: str, force: bool = False):
@@ -18,11 +17,17 @@ def download_dataset(dataset: str, force: bool = False):
     :param force: bool: Remove contents of the init_data and download of the dataset
     """
 
-    urls: list = DATASETS_INFO[dataset].get("urls", None)
-    credentials = DATASETS_INFO[dataset].get("credentials", (None, None))
     local_data_dir = os.path.join(DATA_PATH, dataset)
+    urls: list = DATASETS_INFO[dataset].get("urls", None)
     if urls is None:
         raise ValueError(f"Invalid dataset: {dataset}. Please choose from {list(DATASETS_INFO.keys())}")
+
+    credentials = DATASETS_INFO[dataset].get("credentials", (None, None))
+    if dataset in ("spc",) and credentials == (None, None):
+        print(f"No credentials provided to download {dataset}")
+        return
+    else:
+        credentials = credentials.split(",")
 
     def _request(_url, position):
         print(f"Downloading {os.path.basename(_url)} to {local_data_dir}")
@@ -46,7 +51,6 @@ def download_dataset(dataset: str, force: bool = False):
         os.makedirs(local_data_dir, exist_ok=True)
         with ThreadPool(min(len(urls), len(os.sched_getaffinity(0)))) as pool:
             pool.starmap(_request, list(zip(urls, list(range(len(urls))))))
-
         print("Done!")
     else:
         print(f"{local_data_dir} is not empty.")
