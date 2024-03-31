@@ -1,3 +1,5 @@
+[![Pylint](https://github.com/livanosg/mel-data/actions/workflows/pylint.yml/badge.svg?branch=master)](https://github.com/livanosg/mel-data/actions/workflows/pylint.yml)
+
 # Skin Lesion Datasets Manager
 ## A convenient manager for:
 - ### Downloading
